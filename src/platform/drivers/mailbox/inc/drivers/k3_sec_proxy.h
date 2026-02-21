@@ -18,32 +18,32 @@
  * thread.
  */
 typedef enum {
-    HOST_FUNCTION_NOTIFY,
-    HOST_FUNCTION_RESPONSE,
-    HOST_FUNCTION_HIGH_PRIORITY,
-    HOST_FUNCTION_LOW_PRIORITY,
-    HOST_FUNCTION_NOTIFY_RESP,
+    MBOX_K3_SEC_PROXY_HOST_FUNCTION_NOTIFY,
+    MBOX_K3_SEC_PROXY_HOST_FUNCTION_RESPONSE,
+    MBOX_K3_SEC_PROXY_HOST_FUNCTION_HIGH_PRIORITY,
+    MBOX_K3_SEC_PROXY_HOST_FUNCTION_LOW_PRIORITY,
+    MBOX_K3_SEC_PROXY_HOST_FUNCTION_NOTIFY_RESP,
 } MBOX_K3_SEC_PROXY_HOST_FUNCTION;
 
 /**
  * @brief Specifies the direction of data flow for a Secure Proxy thread.
  */
 typedef enum {
-    MSG_DRXN_WRITE = 0,
-    MSG_DRXN_READ = 1,
+    MBOX_K3_SEC_PROXY_MSG_DRXN_WRITE = 0,
+    MBOX_K3_SEC_PROXY_MSG_DRXN_READ = 1,
 } MBOX_K3_SEC_PROXY_MSG_DRXN;
 
 /**
  * @brief Status codes returned by Secure Proxy APIs.
  */
 typedef enum {
-    STATUS_CODE_NO_ERROR = 0,
-    STATUS_CODE_THREAD_CORRUPTED = -1,
-    STATUS_CODE_INCORRECT_DRXN = -2,
-    STATUS_CODE_NO_DATA = -4,
-    STATUS_CODE_INVALID_MSG_LEN = -5,
-    STATUS_CODE_THREAD_CLEAR_FAILED = -6,
-    STATUS_CODE_DIRTY_HANDOFF = -7,
+    MBOX_K3_SEC_PROXY_STATUS_CODE_NO_ERROR = 0,
+    MBOX_K3_SEC_PROXY_STATUS_CODE_THREAD_CORRUPTED = -1,
+    MBOX_K3_SEC_PROXY_STATUS_CODE_INCORRECT_DRXN = -2,
+    MBOX_K3_SEC_PROXY_STATUS_CODE_NO_DATA = -4,
+    MBOX_K3_SEC_PROXY_STATUS_CODE_INVALID_MSG_LEN = -5,
+    MBOX_K3_SEC_PROXY_STATUS_CODE_THREAD_CLEAR_FAILED = -6,
+    MBOX_K3_SEC_PROXY_STATUS_CODE_DIRTY_HANDOFF = -7,
 } MBOX_K3_SEC_PROXY_STATUS_CODES;
 
 /* bit indices */
@@ -66,15 +66,6 @@ typedef enum {
 
 #define MBOX_K3_SEC_PROXY_DATA_START_OFFSET (0x4U)
 #define MBOX_K3_SEC_PROXY_DATA_END_OFFSET (0x3CU) /* completion trigger offset */
-
-/**
- * @brief Structure representing a message to be sent or received via Secure
- * Proxy.
- */
-typedef struct {
-    size_t len;       /**< Length of the message in bytes */
-    uint32_t *buffer; /**< Pointer to the message data buffer */
-} mbox_k3_sec_proxy_msg;
 
 /**
  * @brief Hardware configuration for a Secure Proxy instance.
@@ -164,24 +155,30 @@ typedef struct {
           .host_function = HOST_FUNCTION_NOTIFY_RESP}
 // clang-format on
 
-extern mbox_k3_sec_proxy_desc sec_proxy_desc;
-
 /**
- * @brief Verifies the status and configuration of a Secure Proxy thread.
+ * @brief Verifies the status and configuration of a Secure Proxy thread before
+ * a transaction.
  *
+ * @desc This function checks for thread corruption, validates the thread's
+ * configured direction (read/write) against its intended usage, and ensures the
+ * message queue is not empty if reading.
+ *
+ * @param sec_proxy_desc Pointer to the Secure Proxy descriptor.
  * @param thread_id The ID of the thread to verify.
  * @param msg_drxn Expected message direction (MSG_DRXN_READ or MSG_DRXN_WRITE).
  *
- * @return int32_t STATUS_CODE_NO_ERROR on success, or respective error codes
- * on failure.
+ * @return int32_t STATUS_CODE_NO_ERROR if the thread is valid and ready,
+ * otherwise respective error codes.
  */
-int32_t mbox_k3_sec_proxy_verify_thread(uint8_t thread_id, uint8_t msg_drxn);
+int32_t mbox_k3_sec_proxy_verify_thread(mbox_k3_sec_proxy_desc *sec_proxy_desc, uint8_t thread_id, uint8_t msg_drxn);
 
 /**
  * @brief Reads a message from a specific Secure Proxy thread.
  *
+ * @param sec_proxy_desc Pointer to the Secure Proxy descriptor.
  * @param thread_id The ID of the thread to read from.
- * @param msg Pointer to the structure where the read message will be stored.
+ * @param buffer Pointer to the buffer where the read message will be stored.
+ * @param len Length of the message to read in bytes.
  *
  * @return int32_t STATUS_CODE_NO_ERROR on success, or respective error codes
  * on failure.
@@ -191,13 +188,15 @@ int32_t mbox_k3_sec_proxy_verify_thread(uint8_t thread_id, uint8_t msg_drxn);
  * for little-endian.
  * - byte-ordering logic for trailing bytes assumes LSB-first memory layout.
  */
-int32_t mbox_k3_sec_proxy_read(uint8_t thread_id, mbox_k3_sec_proxy_msg *msg);
+int32_t mbox_k3_sec_proxy_read(mbox_k3_sec_proxy_desc *sec_proxy_desc, uint8_t thread_id, void* buffer, size_t len);
 
 /**
  * @brief Writes a message to a specific Secure Proxy thread.
  *
+ * @param sec_proxy_desc Pointer to the Secure Proxy descriptor.
  * @param thread_id The ID of the thread to write to.
- * @param msg Pointer to the structure containing the message to send.
+ * @param buffer Pointer to the buffer containing the message to send.
+ * @param len Length of the message to send in bytes.
  *
  * @return int32_t STATUS_CODE_NO_ERROR on success, or an error code on
  * failure.
@@ -207,30 +206,33 @@ int32_t mbox_k3_sec_proxy_read(uint8_t thread_id, mbox_k3_sec_proxy_msg *msg);
  * for little-endian.
  * - byte-ordering logic for trailing bytes assumes LSB-first memory layout.
  */
-int32_t mbox_k3_sec_proxy_write(uint8_t thread_id, mbox_k3_sec_proxy_msg *msg);
+int32_t mbox_k3_sec_proxy_write(mbox_k3_sec_proxy_desc *sec_proxy_desc, uint8_t thread_id, void* buffer, size_t len);
 
 /**
  * @brief Clears all pending messages from a Secure Proxy thread.
  *
+ * @param sec_proxy_desc Pointer to the Secure Proxy descriptor.
  * @param thread_id The ID of the thread to clear.
  *
  * @return int32_t STATUS_CODE_NO_ERROR on success, or an error code on failure.
  */
-int32_t mbox_k3_sec_proxy_clear(uint8_t thread_id);
+int32_t mbox_k3_sec_proxy_clear(mbox_k3_sec_proxy_desc *sec_proxy_desc, uint8_t thread_id);
 
 /**
  * @brief Performs a health check on a Secure Proxy thread and reports status.
  *
+ * @param sec_proxy_desc Pointer to the Secure Proxy descriptor.
  * @param thread_id The ID of the thread to probe.
  *
  * @return int32_t STATUS_CODE_NO_ERROR on success, or respective error codes
  * on failure.
  */
-int32_t mbox_k3_sec_proxy_probe(uint8_t thread_id);
+int32_t mbox_k3_sec_proxy_probe(mbox_k3_sec_proxy_desc *sec_proxy_desc, uint8_t thread_id);
 
 /**
  * @brief Protocol-level ping test hook.
  *
+ * @param sec_proxy_desc Pointer to the Secure Proxy descriptor.
  * @param thread_id The ID of the thread to test.
  *
  * @return int32_t STATUS_CODE_NO_ERROR on success, or an error code on failure.
@@ -239,6 +241,6 @@ int32_t mbox_k3_sec_proxy_probe(uint8_t thread_id);
  * - this is a weak function; a strong implementation should be provided by
  * the platform to verify pipeline cleanliness.
  */
-int32_t mbox_k3_sec_proxy_ping_test(uint8_t thread_id);
+int32_t mbox_k3_sec_proxy_ping_test(mbox_k3_sec_proxy_desc *sec_proxy_desc, uint8_t thread_id);
 
 #endif /* __MBOX_K3_SEC_PROXY_H_ */
