@@ -60,12 +60,18 @@ int32_t mbox_k3_sec_proxy_verify_thread(mbox_k3_sec_proxy_desc* sec_proxy_desc, 
     }
 
     /* check if msg queue has entries before txn attempt */
-    if ((0 ==
+    if (MBOX_K3_SEC_PROXY_MSG_DRXN_READ == msg_drxn) {
+        uint64_t tick_start = sysreg_cntpct_el0_read();
+        uint64_t ticks_per_us = sysreg_cntfrq_el0_read() / 1000000U;
+        while (0 ==
             (read_reg(thread_rt_base, MBOX_K3_SEC_PROXY_RT_THREAD_STATUS_OFFSET) &
-                MBOX_K3_SEC_PROXY_RT_STATUS_CUR_CNT_MASK)) &&
-        (MBOX_K3_SEC_PROXY_MSG_DRXN_READ == msg_drxn)) {
-        ERROR("secure_proxy_thread_%d no entries in message queue", thread_id);
-        return MBOX_K3_SEC_PROXY_STATUS_CODE_NO_DATA;
+                MBOX_K3_SEC_PROXY_RT_STATUS_CUR_CNT_MASK)) {
+            if ((sysreg_cntpct_el0_read() - tick_start) >
+                (sec_proxy_desc->read_timeout_us * ticks_per_us)) {
+                ERROR("secure_proxy_thread_%d no entries in message queue", thread_id);
+                return MBOX_K3_SEC_PROXY_STATUS_CODE_NO_DATA;
+            }
+        }
     }
 
     return MBOX_K3_SEC_PROXY_STATUS_CODE_NO_ERROR;

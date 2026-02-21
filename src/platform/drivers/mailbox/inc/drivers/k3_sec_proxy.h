@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <types.h>
 #include <util.h>
+#include <arch/sysregs.h>
 
 /**
  * @brief Defines the specific host function associated with a Secure Proxy
@@ -112,6 +113,7 @@ typedef struct {
  */
 typedef struct {
     mbox_k3_sec_proxy_instance thread_inst; /**< Secure Proxy instance configuration */
+    uint32_t read_timeout_us; /**< timeout before read operation fails due to no data in the mbox queue */
     mbox_k3_sec_proxy_thread_desc sec_proxy_thread_desc[]; /**< Array of thread descriptors */
 } mbox_k3_sec_proxy_desc;
 
