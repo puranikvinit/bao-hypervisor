@@ -11,6 +11,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <types.h>
+#include <util.h>
 
 /**
  * @brief Defines the specific host function associated with a Secure Proxy
@@ -42,6 +43,7 @@ typedef enum {
     STATUS_CODE_NO_DATA = -4,
     STATUS_CODE_INVALID_MSG_LEN = -5,
     STATUS_CODE_THREAD_CLEAR_FAILED = -6,
+    STATUS_CODE_DIRTY_HANDOFF = -7,
 } MBOX_K3_SEC_PROXY_STATUS_CODES;
 
 /* bit indices */
@@ -225,5 +227,18 @@ int32_t mbox_k3_sec_proxy_clear(uint8_t thread_id);
  * on failure.
  */
 int32_t mbox_k3_sec_proxy_probe(uint8_t thread_id);
+
+/**
+ * @brief Protocol-level ping test hook.
+ *
+ * @param thread_id The ID of the thread to test.
+ *
+ * @return int32_t STATUS_CODE_NO_ERROR on success, or an error code on failure.
+ *
+ * @notes
+ * - this is a weak function; a strong implementation should be provided by
+ * the platform to verify pipeline cleanliness.
+ */
+int32_t mbox_k3_sec_proxy_ping_test(uint8_t thread_id);
 
 #endif /* __MBOX_K3_SEC_PROXY_H_ */

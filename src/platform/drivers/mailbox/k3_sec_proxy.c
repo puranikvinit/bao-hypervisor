@@ -4,7 +4,6 @@
  */
 
 #include <drivers/k3_sec_proxy.h>
-#include <stdint.h>
 
 /**
  * @brief Reads a 32-bit value from a memory-mapped register.
@@ -272,18 +271,52 @@ int32_t mbox_k3_sec_proxy_probe(uint8_t thread_id)
 {
     paddr_t thread_scfg_base =
         sec_proxy_desc.thread_inst.scfg_base + MBOX_K3_SEC_PROXY_THREAD_OFFSET(thread_id);
-
     uint32_t config = read_reg(thread_scfg_base, MBOX_K3_SEC_PROXY_SCFG_THREAD_CTRL_OFFSET);
+
+    paddr_t thread_rt_base =
+        sec_proxy_desc.thread_inst.rt_base + MBOX_K3_SEC_PROXY_THREAD_OFFSET(thread_id);
 
     uint8_t hw_host = (config >> 8) & 0xFF;
     uint8_t expected_host = sec_proxy_desc.sec_proxy_thread_desc[thread_id].host_id;
 
+    /* [step-1] verify thread access/host ownership */
     if (hw_host != expected_host) {
         ERROR("sec_proxy_thread_%d probe failed (hw_host=%d, expected=%d)", thread_id, hw_host,
             expected_host);
         return STATUS_CODE_THREAD_CORRUPTED;
     }
 
+    /* [step-2] verify if thread is clean */
+    int32_t probe_status = mbox_k3_sec_proxy_verify_thread(thread_id, MSG_DRXN_WRITE);
+    if (STATUS_CODE_NO_ERROR != probe_status) {
+        INFO("sec_proxy_thread_%d probe failed (error_id=%d)", thread_id, probe_status);
+        return probe_status;
+    }
+
+    if (0 !=
+        (read_reg(thread_rt_base, MBOX_K3_SEC_PROXY_RT_THREAD_STATUS_OFFSET) &
+            MBOX_K3_SEC_PROXY_RT_STATUS_CUR_CNT_MASK)) {
+        ERROR("secure_proxy_thread_%d probe failed (message queue not clean)", thread_id);
+        return STATUS_CODE_DIRTY_HANDOFF;
+    }
+
+    /* [step-3] check pipeline health by pinging sysfw
+     *
+     * @notes
+     * - the hook needs to be implemented by the platform, as the driver is protocol agnostic.
+     */
+    probe_status = mbox_k3_sec_proxy_ping_test(thread_id);
+    if (STATUS_CODE_NO_ERROR != probe_status) {
+        ERROR("sec_proxy_thread_%d probe failed (sysfw ping failure)", thread_id);
+        return probe_status;
+    }
+
     INFO("sec_proxy_thread_%d probe success", thread_id);
+    return probe_status;
+}
+
+__attribute__((weak)) int32_t mbox_k3_sec_proxy_ping_test(uint8_t thread_id)
+{
+    UNUSED_ARG(thread_id);
     return STATUS_CODE_NO_ERROR;
 }
