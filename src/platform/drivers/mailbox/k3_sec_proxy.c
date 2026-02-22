@@ -301,26 +301,20 @@ int32_t mbox_k3_sec_proxy_probe(mbox_k3_sec_proxy_desc* sec_proxy_desc, uint8_t 
         return probe_status;
     }
 
-    /* [step-3] check pipeline health by pinging sysfw
-     *
-     * @notes
-     * - the hook needs to be implemented by the platform, as the driver is protocol agnostic.
-     */
-    probe_status = mbox_k3_sec_proxy_ping_test(sec_proxy_desc, thread_id);
-    if (MBOX_K3_SEC_PROXY_STATUS_CODE_NO_ERROR != probe_status) {
-        ERROR("sec_proxy_thread_%d probe failed (sysfw ping failure)", thread_id);
-        return probe_status;
-    }
-
     INFO("sec_proxy_thread_%d probe success", thread_id);
     return probe_status;
 }
 
-__attribute__((weak)) int32_t mbox_k3_sec_proxy_ping_test(mbox_k3_sec_proxy_desc* sec_proxy_desc,
-    uint8_t thread_id)
+mbox_k3_sec_proxy_thread_desc*
+mbox_k3_sec_proxy_get_thread_by_host_func(mbox_k3_sec_proxy_desc* sec_proxy_desc, uint8_t host_id,
+    MBOX_K3_SEC_PROXY_HOST_FUNCTION host_function)
 {
-    UNUSED_ARG(thread_id);
-    UNUSED_ARG(sec_proxy_desc);
-
-    return MBOX_K3_SEC_PROXY_STATUS_CODE_NO_ERROR;
+    for (size_t thread_iterator = 0; thread_iterator < sec_proxy_desc->num_threads;
+        thread_iterator++) {
+        if (sec_proxy_desc->sec_proxy_thread_desc[thread_iterator].host_id == host_id &&
+            sec_proxy_desc->sec_proxy_thread_desc[thread_iterator].host_function == host_function) {
+            return &sec_proxy_desc->sec_proxy_thread_desc[thread_iterator];
+        }
+    }
+    return NULL;
 }
