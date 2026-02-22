@@ -175,12 +175,13 @@ typedef struct __attribute__((packed)) {
  *
  * @param ctx Pointer to the TISCI driver context.
  * @param host_id The Host ID to be used in the message header.
- * @param chan_id The channel ID to use for the transaction.
+ * @param tx_chan_id The channel ID to use for the send transaction.
+ * @param rx_chan_id The channel ID to use for the recv transaction.
  * @param ver_rsp Pointer to the structure where the version response will be stored.
  *
  * @return TISCI_STATUS_CODE_NO_ERROR on success, or a negative error code on failure.
  */
-int32_t tisci_get_revision(tisci_ctx* ctx, uint8_t host_id, uint8_t chan_id,
+int32_t tisci_get_revision(tisci_ctx* ctx, uint8_t host_id, uint8_t tx_chan_id, uint8_t rx_chan_id,
     tisci_msg_version_rsp* ver_rsp);
 
 #endif /* __TISCI_H_ */

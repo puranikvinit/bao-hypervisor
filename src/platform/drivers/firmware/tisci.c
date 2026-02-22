@@ -112,25 +112,25 @@ static int32_t _get_rsp(tisci_ctx* ctx, uint8_t chan_id, void* rx_buf, size_t rx
  *
  * @return TISCI_STATUS_CODE_NO_ERROR on success, error code on failure.
  */
-static int32_t _perform_txn(tisci_ctx* ctx, uint8_t chan_id, void* tx_buf, size_t tx_len,
-    void* rx_buf, size_t rx_len, uint8_t seq_id)
+static int32_t _perform_txn(tisci_ctx* ctx, uint8_t tx_chan_id, uint8_t rx_chan_id, void* tx_buf,
+    size_t tx_len, void* rx_buf, size_t rx_len, uint8_t seq_id)
 {
-    int32_t txn_status = ctx->ops.send(chan_id, tx_buf, tx_len);
+    int32_t txn_status = ctx->ops.send(tx_chan_id, tx_buf, tx_len);
     if (TISCI_STATUS_CODE_NO_ERROR != txn_status) {
-        ERROR("channel_%d txn - write failed", chan_id);
+        ERROR("channel_%d txn - write failed", tx_chan_id);
         return TISCI_STATUS_CODE_MSG_SEND_FAILED;
     }
 
-    txn_status = _get_rsp(ctx, chan_id, rx_buf, rx_len, seq_id);
+    txn_status = _get_rsp(ctx, rx_chan_id, rx_buf, rx_len, seq_id);
     if (TISCI_STATUS_CODE_NO_ERROR != txn_status) {
-        ERROR("channel_%d txn - read failed", chan_id);
+        ERROR("channel_%d txn - read failed", rx_chan_id);
         return txn_status;
     }
 
     return TISCI_STATUS_CODE_NO_ERROR;
 }
 
-int32_t tisci_get_revision(tisci_ctx* ctx, uint8_t host_id, uint8_t chan_id,
+int32_t tisci_get_revision(tisci_ctx* ctx, uint8_t host_id, uint8_t tx_chan_id, uint8_t rx_chan_id,
     tisci_msg_version_rsp* ver_rsp)
 {
     tisci_msg_header msg_header = {
@@ -144,7 +144,7 @@ int32_t tisci_get_revision(tisci_ctx* ctx, uint8_t host_id, uint8_t chan_id,
 
     int32_t rev_status = _setup_hdr(ctx, &msg_header, sizeof(msg_header));
     if (TISCI_STATUS_CODE_NO_ERROR != rev_status) {
-        ERROR("channel_%d msg hdr setup failed", chan_id);
+        ERROR("channel_%d msg hdr setup failed", tx_chan_id);
         spin_unlock(&(ctx->seq_id_lock));
         return rev_status;
     }
@@ -152,10 +152,10 @@ int32_t tisci_get_revision(tisci_ctx* ctx, uint8_t host_id, uint8_t chan_id,
     uint8_t cur_seq_id = ctx->seq_id;
     spin_unlock(&(ctx->seq_id_lock));
 
-    rev_status = _perform_txn(ctx, chan_id, &msg_header, sizeof(msg_header), ver_rsp,
+    rev_status = _perform_txn(ctx, tx_chan_id, rx_chan_id, &msg_header, sizeof(msg_header), ver_rsp,
         sizeof(*ver_rsp), cur_seq_id);
     if (TISCI_STATUS_CODE_NO_ERROR != rev_status) {
-        ERROR("channel_%d tisci txn failed", chan_id);
+        ERROR("channel_%d tisci txn failed", tx_chan_id);
         return rev_status;
     }
 
