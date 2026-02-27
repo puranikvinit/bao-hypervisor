@@ -7,6 +7,7 @@
 #define __MBOX_K3_SEC_PROXY_H_
 
 #include <bao.h>
+#include <cpu.h>
 #include <plat/platform.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -253,5 +254,7 @@ int32_t mbox_k3_sec_proxy_probe(mbox_k3_sec_proxy_desc* sec_proxy_desc, uint8_t 
 mbox_k3_sec_proxy_thread_desc*
 mbox_k3_sec_proxy_get_thread_by_host_func(mbox_k3_sec_proxy_desc* sec_proxy_desc, uint8_t host_id,
     MBOX_K3_SEC_PROXY_HOST_FUNCTION host_function);
+
+void mbox_k3_sec_proxy_init(mbox_k3_sec_proxy_desc* sec_proxy_desc);
 
 #endif /* __MBOX_K3_SEC_PROXY_H_ */

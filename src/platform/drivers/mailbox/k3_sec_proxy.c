@@ -318,3 +318,20 @@ mbox_k3_sec_proxy_get_thread_by_host_func(mbox_k3_sec_proxy_desc* sec_proxy_desc
     }
     return NULL;
 }
+
+void mbox_k3_sec_proxy_init(mbox_k3_sec_proxy_desc* sec_proxy_desc)
+{
+    if (cpu_is_master()) {
+        sec_proxy_desc->thread_inst.rt_base = (vaddr_t)mem_alloc_map_dev(&cpu()->as, SEC_HYP_GLOBAL,
+            INVALID_VA, sec_proxy_desc->thread_inst.rt_base,
+            NUM_PAGES(sec_proxy_desc->thread_inst.rt_size));
+
+        sec_proxy_desc->thread_inst.scfg_base = (vaddr_t)mem_alloc_map_dev(&cpu()->as,
+            SEC_HYP_GLOBAL, INVALID_VA, sec_proxy_desc->thread_inst.scfg_base,
+            NUM_PAGES(sec_proxy_desc->thread_inst.scfg_size));
+
+        sec_proxy_desc->thread_inst.data_base = (vaddr_t)mem_alloc_map_dev(&cpu()->as,
+            SEC_HYP_GLOBAL, INVALID_VA, sec_proxy_desc->thread_inst.data_base,
+            NUM_PAGES(sec_proxy_desc->thread_inst.data_size));
+    }
+}
