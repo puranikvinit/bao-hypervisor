@@ -10,6 +10,7 @@
 #include <stddef.h>
 #include <stdint.h>
 #include <bao.h>
+#include <string.h>
 
 /**
  * @brief TISCI Status Codes
@@ -34,23 +35,57 @@ typedef enum {
 #define TISCI_MSG_REQ_FLAG_AOP                                               \
     (1 << TISCI_MSG_REQ_FLAG_AOP_IDX) /* ACK On Processed (AOP) - set if msg \
                                      requires ACK from DMSC */
-#define TISCI_MSG_REQ_FLAG_REQ_NOTFWD2DM (1 << TISCI_MSG_REQ_FLAG_REQ_NOTFWD2DM_IDX)
+#define TISCI_MSG_REQ_FLAG_REQ_NOTFWD2DM                 (1 << TISCI_MSG_REQ_FLAG_REQ_NOTFWD2DM_IDX)
 
 /* msg response flags */
-#define TISCI_MSG_RSP_FLAG_ACK_IDX       (1)
+#define TISCI_MSG_RSP_FLAG_ACK_IDX                       (1)
 
-#define TISCI_MSG_RSP_FLAG_ACK           (1 << TISCI_MSG_RSP_FLAG_ACK_IDX)
-#define TISCI_MSG_RSP_FLAG_NAK           (0 << TISCI_MSG_RSP_FLAG_ACK_IDX)
+#define TISCI_MSG_RSP_FLAG_ACK                           (1 << TISCI_MSG_RSP_FLAG_ACK_IDX)
+#define TISCI_MSG_RSP_FLAG_NAK                           (0 << TISCI_MSG_RSP_FLAG_ACK_IDX)
 
-#define TISCI_MSG_MAX_SIZE               (56U)
-#define TISCI_MSG_TXN_TIMEOUT            (1000) /* 1000ms */
-#define TISCI_MSG_NUM_RETRIES            (5)
+#define TISCI_MSG_MAX_SIZE                               (56U)
+#define TISCI_MSG_TXN_TIMEOUT                            (1000) /* 1000ms */
+#define TISCI_MSG_NUM_RETRIES                            (5)
+
+#define TISCI_RM_IRQ_VALID_DEST_ID_IDX                   (0U)
+#define TISCI_RM_IRQ_VALID_DEST_ID                       (1U << TISCI_RM_IRQ_VALID_DEST_ID_IDX)
+
+#define TISCI_RM_IRQ_VALID_DEST_HOST_IRQ_IDX             (1U)
+#define TISCI_RM_IRQ_VALID_DEST_HOST_IRQ                 (1U << TISCI_RM_IRQ_VALID_DEST_HOST_IRQ_IDX)
+
+#define TISCI_RM_IRQ_VALID_IA_ID_IDX                     (2U)
+#define TISCI_RM_IRQ_VALID_IA_ID                         (1U << TISCI_RM_IRQ_VALID_IA_ID_IDX)
+
+#define TISCI_RM_IRQ_VALID_VIRT_INT_IDX                  (3U)
+#define TISCI_RM_IRQ_VALID_VIRT_INT                      (1U << TISCI_RM_IRQ_VALID_VIRT_INT_IDX)
+
+#define TISCI_RM_IRQ_VALID_GLOBAL_EVENT_IDX              (4U)
+#define TISCI_RM_IRQ_VALID_GLOBAL_EVENT                  (1U << TISCI_RM_IRQ_VALID_GLOBAL_EVENT_IDX)
+
+#define TISCI_RM_IRQ_VALID_VIRT_INT_STATUS_BIT_INDEX_IDX (5U)
+#define TISCI_RM_IRQ_VALID_VIRT_INT_STATUS_BIT_INDEX \
+    (1U << TISCI_RM_IRQ_VALID_VIRT_INT_STATUS_BIT_INDEX_IDX)
+
+#define TISCI_RM_IRQ_VALID_SEC_HOST_IDX (31U)
+#define TISCI_RM_IRQ_VALID_SEC_HOST     (1U << TISCI_RM_IRQ_VALID_SEC_HOST_IDX)
 
 /**
  * review the version of the currently running sysfw
  * secure thread msg => NO
  */
-#define TISCI_MSG_VERSION                (0x0002U)
+#define TISCI_MSG_VERSION               (0x0002U)
+
+/**
+ * configure peripherals within the SoC interrupt architecture
+ * secure thread msg => NO
+ */
+#define TISCI_MSG_RM_IRQ_SET            (0x1000U)
+
+/**
+ * release an IRQ route between a device peripheral and a host processor
+ * secure thread msg => NO
+ */
+#define TISCI_MSG_RM_IRQ_RELEASE        (0x1001U)
 
 /*
  * tisci msg format
@@ -171,6 +206,80 @@ typedef struct __attribute__((packed)) {
 } tisci_msg_version_rsp;
 
 /**
+ * @brief Configures peripheral to processor interrupt route according to the valid configuration
+ * provided.
+ */
+typedef struct __attribute__((packed)) {
+    /** Standard TISCI message header */
+    tisci_msg_header msg_header;
+    /** Bitfield defining validity of interrupt route set parameters */
+    uint32_t valid_params;
+    /** ID of interrupt source peripheral */
+    uint16_t src_id;
+    /** Interrupt source index within source peripheral */
+    uint16_t src_idx;
+    /** SoC IR device ID */
+    uint16_t dest_id;
+    /** SoC IR output index */
+    uint16_t dest_host_irq;
+    /** Device ID of interrupt aggregator in which the virtual interrupt resides */
+    uint16_t intr_aggr_id;
+    /** Virtual interrupt number when configuring an interrupt aggregator */
+    uint16_t virt_int;
+    /** Global event mapped to interrupt aggregator virtual interrupt status bit */
+    uint16_t global_event;
+    /** Virtual interrupt status bit to set if the interrupt route utilizes an IA */
+    uint8_t virt_int_status_bit_idx;
+    /** Secondary host value to replace the host value for the message */
+    uint8_t sec_host;
+} tisci_msg_rm_irq_set_req;
+
+/**
+ * @brief Response to setting a peripheral to processor interrupt route.
+ */
+typedef struct __attribute__((packed)) {
+    /** Standard TISCI message header */
+    tisci_msg_header msg_header;
+} tisci_msg_rm_irq_set_rsp;
+
+/**
+ * @brief Releases peripheral to processor interrupt route according to the valid configuration
+ * provided.
+ */
+typedef struct __attribute__((packed)) {
+    /** Standard TISCI message header */
+    tisci_msg_header msg_header;
+    /** Bitfield defining validity of interrupt route release parameters */
+    uint32_t valid_params;
+    /** ID of interrupt source peripheral */
+    uint16_t src_id;
+    /** Interrupt source index within source peripheral */
+    uint16_t src_idx;
+    /** SoC IR device ID */
+    uint16_t dest_id;
+    /** SoC IR output index */
+    uint16_t dest_host_irq;
+    /** Device ID of interrupt aggregator in which the virtual interrupt resides */
+    uint16_t intr_aggr_id;
+    /** Virtual interrupt number if the interrupt route is through an interrupt aggregator */
+    uint16_t virt_int;
+    /** Global event mapped to interrupt aggregator virtual interrupt status bit */
+    uint16_t global_event;
+    /** Virtual interrupt status bit to release if the interrupt route utilizes an IA */
+    uint8_t virt_int_status_bit_idx;
+    /** Secondary host value to replace the host value for the message */
+    uint8_t sec_host;
+} tisci_msg_rm_irq_release_req;
+
+/**
+ * @brief Response to releasing a peripheral to processor interrupt route.
+ */
+typedef struct __attribute__((packed)) {
+    /** Standard TISCI message header */
+    tisci_msg_header msg_header;
+} tisci_msg_rm_irq_release_rsp;
+
+/**
  * @brief Retrieves the revision of the System Firmware.
  *
  * @param ctx Pointer to the TISCI driver context.
@@ -183,5 +292,36 @@ typedef struct __attribute__((packed)) {
  */
 int32_t tisci_get_revision(tisci_ctx* ctx, uint8_t host_id, uint8_t tx_chan_id, uint8_t rx_chan_id,
     tisci_msg_version_rsp* ver_rsp);
+
+/**
+ * @brief Configures peripheral to processor interrupt route.
+ *
+ * @param ctx Pointer to the TISCI driver context.
+ * @param host_id The Host ID to be used in the message header.
+ * @param tx_chan_id The channel ID to use for the send transaction.
+ * @param rx_chan_id The channel ID to use for the recv transaction.
+ * @param irq_set_req Pointer to the interrupt route set request.
+ * @param irq_set_rsp Pointer to the interrupt route set response.
+ *
+ * @return TISCI_STATUS_CODE_NO_ERROR on success, or a negative error code on failure.
+ */
+int32_t tisci_rm_irq_set(tisci_ctx* ctx, uint8_t host_id, uint8_t tx_chan_id, uint8_t rx_chan_id,
+    tisci_msg_rm_irq_set_req* irq_set_req, tisci_msg_rm_irq_set_rsp* irq_set_rsp);
+
+/**
+ * @brief Releases peripheral to processor interrupt route.
+ *
+ * @param ctx Pointer to the TISCI driver context.
+ * @param host_id The Host ID to be used in the message header.
+ * @param tx_chan_id The channel ID to use for the send transaction.
+ * @param rx_chan_id The channel ID to use for the recv transaction.
+ * @param irq_release_req Pointer to the interrupt route release request.
+ * @param irq_release_rsp Pointer to the interrupt route release response.
+ *
+ * @return TISCI_STATUS_CODE_NO_ERROR on success, or a negative error code on failure.
+ */
+int32_t tisci_rm_irq_release(tisci_ctx* ctx, uint8_t host_id, uint8_t tx_chan_id,
+    uint8_t rx_chan_id, tisci_msg_rm_irq_release_req* irq_release_req,
+    tisci_msg_rm_irq_release_rsp* irq_release_rsp);
 
 #endif /* __TISCI_H_ */

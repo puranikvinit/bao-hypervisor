@@ -4,6 +4,9 @@
  */
 
 #include <drivers/tisci.h>
+#include <stddef.h>
+#include <stdint.h>
+#include <string.h>
 
 /**
  * @brief Prepares the TISCI message header.
@@ -97,33 +100,44 @@ static int32_t _get_rsp(tisci_ctx* ctx, uint8_t chan_id, void* rx_buf, size_t rx
 }
 
 /**
+ * @brief Transaction context for sending and receiving TISCI messages.
+ *
+ * Holds the channel ID, buffer, and buffer length required for a single tx or rx operation during a
+ * TISCI transaction.
+ */
+typedef struct {
+    /** Channel ID for the transaction */
+    uint8_t chan_id;
+    /** Pointer to the buffer containing the message data */
+    void* buff;
+    /** Length of the message buffer in bytes */
+    size_t buff_len;
+} txn_ctx;
+
+/**
  * @brief Performs a full TISCI transaction (Send + Receive).
  *
  * Wraps the send and receive operations. It first sends the request,
  * then immediately waits for the corresponding response.
  *
  * @param ctx The driver context.
- * @param chan_id The channel ID for the transaction.
- * @param tx_buf Pointer to the transmit buffer.
- * @param tx_len Length of data to transmit.
- * @param rx_buf Pointer to the receive buffer.
- * @param rx_len Length of the receive buffer.
- * @param expected_seq_id Expected Sequence ID for the received message.
+ * @param tx_ctx Pointer to the tx transaction context.
+ * @param rx_ctx Pointer to the rx transaction context.
+ * @param seq_id Expected Sequence ID for the received message.
  *
  * @return TISCI_STATUS_CODE_NO_ERROR on success, error code on failure.
  */
-static int32_t _perform_txn(tisci_ctx* ctx, uint8_t tx_chan_id, uint8_t rx_chan_id, void* tx_buf,
-    size_t tx_len, void* rx_buf, size_t rx_len, uint8_t seq_id)
+static int32_t _perform_txn(tisci_ctx* ctx, txn_ctx* tx_ctx, txn_ctx* rx_ctx, uint8_t seq_id)
 {
-    int32_t txn_status = ctx->ops.send(tx_chan_id, tx_buf, tx_len);
+    int32_t txn_status = ctx->ops.send(tx_ctx->chan_id, tx_ctx->buff, tx_ctx->buff_len);
     if (TISCI_STATUS_CODE_NO_ERROR != txn_status) {
-        ERROR("channel_%d txn - write failed", tx_chan_id);
+        ERROR("channel_%d txn - write failed", tx_ctx->chan_id);
         return TISCI_STATUS_CODE_MSG_SEND_FAILED;
     }
 
-    txn_status = _get_rsp(ctx, rx_chan_id, rx_buf, rx_len, seq_id);
+    txn_status = _get_rsp(ctx, rx_ctx->chan_id, rx_ctx->buff, rx_ctx->buff_len, seq_id);
     if (TISCI_STATUS_CODE_NO_ERROR != txn_status) {
-        ERROR("channel_%d txn - read failed", rx_chan_id);
+        ERROR("channel_%d txn - read failed", rx_ctx->chan_id);
         return txn_status;
     }
 
@@ -152,8 +166,107 @@ int32_t tisci_get_revision(tisci_ctx* ctx, uint8_t host_id, uint8_t tx_chan_id, 
     uint8_t cur_seq_id = ctx->seq_id;
     spin_unlock(&(ctx->seq_id_lock));
 
-    rev_status = _perform_txn(ctx, tx_chan_id, rx_chan_id, &msg_header, sizeof(msg_header), ver_rsp,
-        sizeof(*ver_rsp), cur_seq_id);
+    txn_ctx tx_ctx = {
+        .chan_id = tx_chan_id,
+        .buff = &msg_header,
+        .buff_len = sizeof(msg_header),
+    };
+    txn_ctx rx_ctx = {
+        .chan_id = rx_chan_id,
+        .buff = ver_rsp,
+        .buff_len = sizeof(*ver_rsp),
+    };
+    rev_status = _perform_txn(ctx, &tx_ctx, &rx_ctx, cur_seq_id);
+
+    if (TISCI_STATUS_CODE_NO_ERROR != rev_status) {
+        ERROR("channel_%d tisci txn failed", tx_chan_id);
+        return rev_status;
+    }
+
+    return TISCI_STATUS_CODE_NO_ERROR;
+}
+
+int32_t tisci_rm_irq_set(tisci_ctx* ctx, uint8_t host_id, uint8_t tx_chan_id, uint8_t rx_chan_id,
+    tisci_msg_rm_irq_set_req* irq_set_req, tisci_msg_rm_irq_set_rsp* irq_set_rsp)
+{
+    tisci_msg_header msg_header = {
+        .host_id = host_id,
+        .type = TISCI_MSG_RM_IRQ_SET,
+    };
+
+    /* critical section - aquire a spinlock on hdr setup to ensure atomic updates to seq_id and
+     * store them for the current txn */
+    spin_lock(&(ctx->seq_id_lock));
+
+    int32_t rev_status = _setup_hdr(ctx, &msg_header, sizeof(msg_header));
+    if (TISCI_STATUS_CODE_NO_ERROR != rev_status) {
+        ERROR("channel_%d msg hdr setup failed", tx_chan_id);
+        spin_unlock(&(ctx->seq_id_lock));
+        return rev_status;
+    }
+
+    uint8_t cur_seq_id = ctx->seq_id;
+    spin_unlock(&(ctx->seq_id_lock));
+
+    memcpy(&(irq_set_req->msg_header), &msg_header, sizeof(msg_header));
+
+    txn_ctx tx_ctx = {
+        .chan_id = tx_chan_id,
+        .buff = irq_set_req,
+        .buff_len = sizeof(tisci_msg_rm_irq_set_req),
+    };
+    txn_ctx rx_ctx = {
+        .chan_id = rx_chan_id,
+        .buff = irq_set_rsp,
+        .buff_len = sizeof(tisci_msg_rm_irq_set_rsp),
+    };
+    rev_status = _perform_txn(ctx, &tx_ctx, &rx_ctx, cur_seq_id);
+
+    if (TISCI_STATUS_CODE_NO_ERROR != rev_status) {
+        ERROR("channel_%d tisci txn failed", tx_chan_id);
+        return rev_status;
+    }
+
+    return TISCI_STATUS_CODE_NO_ERROR;
+}
+
+int32_t tisci_rm_irq_release(tisci_ctx* ctx, uint8_t host_id, uint8_t tx_chan_id,
+    uint8_t rx_chan_id, tisci_msg_rm_irq_release_req* irq_release_req,
+    tisci_msg_rm_irq_release_rsp* irq_release_rsp)
+{
+    tisci_msg_header msg_header = {
+        .host_id = host_id,
+        .type = TISCI_MSG_RM_IRQ_RELEASE,
+    };
+
+    /* critical section - aquire a spinlock on hdr setup to ensure atomic updates to seq_id and
+     * store them for the current txn */
+    spin_lock(&(ctx->seq_id_lock));
+
+    int32_t rev_status = _setup_hdr(ctx, &msg_header, sizeof(msg_header));
+    if (TISCI_STATUS_CODE_NO_ERROR != rev_status) {
+        ERROR("channel_%d msg hdr setup failed", tx_chan_id);
+        spin_unlock(&(ctx->seq_id_lock));
+        return rev_status;
+    }
+
+    uint8_t cur_seq_id = ctx->seq_id;
+    spin_unlock(&(ctx->seq_id_lock));
+
+    memcpy(&(irq_release_req->msg_header), &msg_header, sizeof(msg_header));
+
+    txn_ctx tx_ctx = {
+        .chan_id = tx_chan_id,
+        .buff = irq_release_req,
+        .buff_len = sizeof(tisci_msg_rm_irq_release_req),
+    };
+    txn_ctx rx_ctx = {
+        .chan_id = rx_chan_id,
+        .buff = irq_release_rsp,
+        .buff_len = sizeof(tisci_msg_rm_irq_release_rsp),
+    };
+    rev_status = _perform_txn(ctx, &tx_ctx, &rx_ctx, cur_seq_id);
+
     if (TISCI_STATUS_CODE_NO_ERROR != rev_status) {
         ERROR("channel_%d tisci txn failed", tx_chan_id);
         return rev_status;
